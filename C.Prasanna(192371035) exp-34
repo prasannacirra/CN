@@ -1,0 +1,67 @@
+#include <stdio.h>
+#include <string.h>
+
+#define POLYNOMIAL "1101" // CRC-3 (X^3 + X^2 + 1)
+
+void xor_operation(char dividend[], char divisor[]) {
+    int len = strlen(divisor);
+    for (int i = 0; i < len; i++) {
+        dividend[i] = (dividend[i] == divisor[i]) ? '0' : '1';
+    }
+}
+
+void crc_encode(char data[], char divisor[], char remainder[]) {
+    int data_len = strlen(data);
+    int divisor_len = strlen(divisor);
+    char temp[data_len + 1];
+
+    strcpy(temp, data);
+
+    for (int i = 0; i <= data_len - divisor_len; ) {
+        if (temp[i] == '1') {
+            xor_operation(temp + i, divisor);
+        }
+        i++;
+    }
+    strcpy(remainder, temp + data_len - divisor_len + 1);
+}
+
+void crc_check(char received[], char divisor[]) {
+    char remainder[10];
+    crc_encode(received, divisor, remainder);
+
+    if (strchr(remainder, '1') == NULL) {
+        printf("No error detected! Data is correct.\n");
+    } else {
+        printf("Error detected in received data!\n");
+    }
+}
+
+int main() {
+    char data[50], encoded_data[50], remainder[10];
+    char divisor[] = POLYNOMIAL;
+
+    printf("Enter binary data: ");
+    scanf("%s", data);
+
+    int data_len = strlen(data);
+    int divisor_len = strlen(divisor);
+    
+    // Append zeros for CRC
+    strcat(data, "000");
+
+    crc_encode(data, divisor, remainder);
+
+    // Encode data (data + remainder)
+    strncpy(encoded_data, data, data_len);
+    strcat(encoded_data, remainder);
+
+    printf("Transmitted Codeword: %s\n", encoded_data);
+
+    // Simulating Error Detection
+    printf("\nEnter received data: ");
+    scanf("%s", encoded_data);
+    crc_check(encoded_data, divisor);
+
+    return 0;
+}
