@@ -1,0 +1,48 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <time.h>
+
+#define WINDOW_SIZE 4   // Number of frames in the window
+#define TOTAL_FRAMES 10 // Total number of frames to be sent
+
+void send_frame(int frame) {
+    printf("Sent Frame %d\n", frame);
+}
+
+int receive_ack(int frame) {
+    // Simulating ACK reception with a 20% packet loss (randomized)
+    return (rand() % 5 != 0);
+}
+
+int main() {
+    srand(time(0)); // Seed for random number generation
+
+    int base = 0; // First frame in the window
+    int next_frame = 0; // Next frame to send
+
+    while (base < TOTAL_FRAMES) {
+        // Send frames within the window
+        while (next_frame < base + WINDOW_SIZE && next_frame < TOTAL_FRAMES) {
+            send_frame(next_frame);
+            next_frame++;
+        }
+
+        // Wait for ACKs
+        sleep(1); // Simulating transmission delay
+
+        while (base < next_frame) {
+            if (receive_ack(base)) {
+                printf("ACK received for Frame %d\n", base);
+                base++;
+            } else {
+                printf("Timeout! Resending from Frame %d\n", base);
+                next_frame = base; // Restart transmission from the lost frame
+                break;
+            }
+        }
+    }
+
+    printf("All frames sent successfully!\n");
+    return 0;
+}
