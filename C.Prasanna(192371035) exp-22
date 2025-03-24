@@ -1,0 +1,29 @@
+#include <stdio.h>
+#include <string.h>
+
+#define PASSWORD "iotdevice123"
+
+int authenticate(char *input_password) {
+    if (strcmp(input_password, PASSWORD) == 0) {
+        printf("Authentication Successful!\n");
+        return 1;
+    } else {
+        printf("Authentication Failed!\n");
+        return 0;
+    }
+}
+
+int main() {
+    char input_password[50];
+    
+    printf("Enter password: ");
+    scanf("%s", input_password);
+    
+    if (authenticate(input_password)) {
+        printf("Access granted to IoT device.\n");
+    } else {
+        printf("Access denied to IoT device.\n");
+    }
+    
+    return 0;
+}
