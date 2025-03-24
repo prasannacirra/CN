@@ -1,0 +1,169 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+
+#define PORT 8080
+#define MAX_CLIENTS 10
+#define BUFFER_SIZE 1024
+
+int clients[MAX_CLIENTS];
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void broadcast_message(char *message, int sender_sock) {
+    pthread_mutex_lock(&mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i] != 0 && clients[i] != sender_sock) {
+            send(clients[i], message, strlen(message), 0);
+        }
+    }
+    pthread_mutex_unlock(&mutex);
+}
+
+void *handle_client(void *arg) {
+    int client_sock = *(int *)arg;
+    char buffer[BUFFER_SIZE];
+    int bytes_received;
+
+    while ((bytes_received = recv(client_sock, buffer, BUFFER_SIZE, 0)) > 0) {
+        buffer[bytes_received] = '\0';
+        printf("Client %d: %s", client_sock, buffer);
+        broadcast_message(buffer, client_sock);
+    }
+
+    pthread_mutex_lock(&mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i] == client_sock) {
+            clients[i] = 0;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&mutex);
+
+    close(client_sock);
+    printf("Client %d disconnected.\n", client_sock);
+    return NULL;
+}
+
+void start_server() {
+    int server_sock, client_sock;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_size;
+    pthread_t thread;
+
+    server_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_sock < 0) {
+        perror("Socket failed");
+        exit(EXIT_FAILURE);
+    }
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    if (bind(server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(server_sock, MAX_CLIENTS) < 0) {
+        perror("Listen failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Chat server is running on port %d...\n", PORT);
+
+    while (1) {
+        addr_size = sizeof(client_addr);
+        client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &addr_size);
+        if (client_sock < 0) {
+            perror("Accept failed");
+            continue;
+        }
+
+        printf("Client %d connected.\n", client_sock);
+
+        pthread_mutex_lock(&mutex);
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i] == 0) {
+                clients[i] = client_sock;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&mutex);
+
+        pthread_create(&thread, NULL, handle_client, &client_sock);
+        pthread_detach(thread);
+    }
+
+    close(server_sock);
+}
+
+void *receive_messages(void *arg) {
+    int sock = *(int *)arg;
+    char buffer[BUFFER_SIZE];
+    int bytes_received;
+
+    while ((bytes_received = recv(sock, buffer, BUFFER_SIZE, 0)) > 0) {
+        buffer[bytes_received] = '\0';
+        printf("\nMessage: %s", buffer);
+        printf("\nYou: ");
+        fflush(stdout);
+    }
+
+    printf("\nServer disconnected.\n");
+    exit(0);
+}
+
+void start_client() {
+    int sock;
+    struct sockaddr_in server_addr;
+    pthread_t thread;
+    char buffer[BUFFER_SIZE];
+
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("Socket failed");
+        exit(EXIT_FAILURE);
+    }
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr);
+
+    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Connection failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Connected to chat server. Type messages to send:\n");
+
+    pthread_create(&thread, NULL, receive_messages, &sock);
+
+    while (1) {
+        printf("You: ");
+        fgets(buffer, BUFFER_SIZE, stdin);
+        send(sock, buffer, strlen(buffer), 0);
+    }
+
+    close(sock);
+}
+
+int main() {
+    int choice;
+    printf("Select mode:\n1. Start Chat Server\n2. Start Chat Client\nChoice: ");
+    scanf("%d", &choice);
+    getchar(); 
+
+    if (choice == 1) {
+        start_server();
+    } else if (choice == 2) {
+        start_client();
+    } else {
+        printf("Invalid choice!\n");
+    }
+
+    return 0;
+}
